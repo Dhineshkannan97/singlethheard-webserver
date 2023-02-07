@@ -5,75 +5,181 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.text.SimpleDateFormat;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.StringTokenizer;
 
 public class Server {
+    private int maxConnections = 100;
+    private int connectionsProcessed = 0;
     static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
+    boolean verbose =true;
+    static final File WEB_ROOT = new File("C:\\Users\\Dhinesh Kannan\\Documents\\Streams\\singlethheard-webserver\\src\\main\\resources");
+    static final String DEFAULT_FILE = "punchline.html";
+    static final String FILE_NOT_FOUND = "404.html";
+    static final String METHOD_NOT_SUPPORTED = "not_supported.html";
+
+    Socket clientSocket;
 
     public void getConnections(ServerSocket serverSocket) throws IOException {
         while (true) {
-            Socket clientSocket;
-
-            Instant startTime = Instant.now();
-            try {
-                clientSocket = serverSocket.accept();
-                Date date = new Date();
-                SimpleDateFormat DateFor = new SimpleDateFormat("MM/dd/yyyy");
-                String stringDate = DateFor.format(date);
-                logger.info("\u001B[33m" + "client send request");
-                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                ClassLoader classLoader = getClass().getClassLoader();
-                InputStream inputStream = classLoader.getResourceAsStream("punchline.html");
-                InputStreamReader isReader = new InputStreamReader(inputStream);
-                BufferedReader reader = new BufferedReader(isReader);
-                StringBuffer htmlLine = new StringBuffer();
-                String str;
-                while ((str = reader.readLine()) != null) {
-                    htmlLine.append(str);
-                }
-                String browserLine;
-                browserLine = in.readLine();
-                if (browserLine != null) {
-                    logger.info(browserLine);
-                    StringTokenizer parse = new StringTokenizer(browserLine);
-                    String method = parse.nextToken().toUpperCase();
-//                    System.out.println(method);
-                    String fileRequest = parse.nextToken().toLowerCase();
-//                    System.out.println(fileRequest);
-                    logger.info(String.valueOf(htmlLine));
-                    PrintWriter out = new PrintWriter(clientSocket.getOutputStream());
-                    if (fileRequest.contains("punchline.html") || fileRequest.equals(null) || fileRequest.equals("/")) {
-                        out.print("HTTP/1.1 200 OK\n");
-                        out.print("Content-Length: " + htmlLine.length() + "\n");
-                        out.print("Content-Type: text/html; charset=utf-8\n");
-                        out.print("Date: " + stringDate + "\n");
-                        out.print("\n");
-                        out.print(htmlLine);
-                    } else {
-                        out.println("HTTP/1.1 404 File Not Found");
-                        out.print("Content-Length: " + htmlLine.length() + "\n");
-                        out.print("Content-Type: text/html; charset=utf-8\n");
-                        out.print("Date: " + stringDate + "\n");
-                        out.print("\n"); // blank line between headers and content
-                        out.print(htmlLine);
-                    }
-                    out.flush();
-//                clientSocket.close();
-                    Instant endTime = Instant.now();
-                    Duration actualDelay = Duration.between(startTime, endTime);
-                    logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
-                } else {
-                    logger.error("browserLine is null");
-                }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
+            if (connectionsProcessed >= maxConnections) {
+                break;
             }
-
+             clientSocket = serverSocket.accept();
+            processClientRequest(clientSocket);
+            connectionsProcessed++;
         }
     }
+
+    private void processClientRequest(Socket clientSocket) throws IOException {
+        Instant startTime = Instant.now();
+        BufferedReader inStream = null;
+        PrintWriter outStream = null;
+        BufferedOutputStream dataOutStream = null;
+//        String requestedFile = null;
+
+        try {
+            outStream = new PrintWriter(clientSocket.getOutputStream());
+            dataOutStream = new BufferedOutputStream(clientSocket.getOutputStream());
+
+            inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            String input;
+            while (((input = inStream.readLine()) != null) && !(input.isEmpty()))
+            {
+                String[] request = parseRequestLine(input);
+                String method = request[0];
+                String requestedFile = request[1];
+                if (!method.equals("GET") && !method.equals("HEAD")) {
+                    File file = new File(WEB_ROOT, METHOD_NOT_SUPPORTED);
+                    int fileLength = (int) file.length();
+                    String contentMimeType = "text/html";
+
+                    byte[] fileData = readFileData(file, fileLength);
+
+                    // we send HTTP Headers with data to client
+                    outStream.println("HTTP/1.1 501 Not Implemented");
+                    outStream.println("Server: Java HTTP Server from S : 1.0");
+                    outStream.println("Date: " + new Date());
+                    outStream.println("Content-type: " + contentMimeType);
+                    outStream.println("Content-length: " + fileLength);
+                    outStream.println(); // blank line between headers and content, very important !
+                    outStream.flush(); // flush character output stream buffer
+                    // file
+                    dataOutStream.write(fileData, 0, fileLength);
+                    dataOutStream.flush();
+
+                } else {
+                    // GET or HEAD method
+                    if (requestedFile.endsWith("/")) {
+                        requestedFile += DEFAULT_FILE;
+                    }
+
+                    File file = new File(WEB_ROOT, requestedFile);
+                    int fileLength = (int) file.length();
+                    String content = getContentType(requestedFile);
+
+                    if (method.equals("GET")) { // GET method so we return content
+                        byte[] fileData = readFileData(file, fileLength);
+
+                        // send HTTP Headers
+                        outStream.println("HTTP/1.1 200 OK");
+                        outStream.println("Server: Java HTTP Server from Dhinesh : 1.0");
+                        outStream.println("Date: " + new Date());
+                        outStream.println("Content-type: " + content);
+                        outStream.println("Content-length: " + fileLength);
+                        outStream.println(); // blank line between headers and content, very important !
+                        outStream.flush(); // flush character output stream buffer
+
+                        dataOutStream.write(fileData, 0, fileLength);
+                        dataOutStream.flush();
+                    }
+
+                    if (verbose) {
+                        System.out.println("File " + requestedFile + " of type " + content + " returned");
+                    }
+
+                }
+            }
+
+        } catch (FileNotFoundException fnfe) {
+            try {
+                fileNotFound(outStream, dataOutStream);
+            } catch (IOException ioe) {
+                logger.warn("Error with file not found exception : " + ioe.getMessage());
+                logger.info("File not found");
+
+            }
+
+        } catch (IOException ioe) {
+            logger.warn("Server error : " + ioe);
+        } finally {
+            try {
+                inStream.close();
+                outStream.close();
+                dataOutStream.close();
+                clientSocket.close(); // we close socket connection
+            } catch (Exception e) {
+                System.err.println("Error closing stream : " + e.getMessage());
+            }
+
+            if (verbose) {
+                System.out.println("Connection closed.\n");
+            }
+        }
+        Instant endTime = Instant.now();
+        Duration actualDelay = Duration.between(startTime, endTime);
+        logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
+    }
+
+    private byte[] readFileData(File file, int fileLength) throws IOException {
+        FileInputStream fileIn = null;
+        byte[] fileData = new byte[fileLength];
+
+        try {
+            fileIn = new FileInputStream(file);
+            fileIn.read(fileData);
+        } finally {
+            if (fileIn != null)
+                fileIn.close();
+        }
+
+        return fileData;
+    }
+
+    // return supported MIME Types
+    private String getContentType(String fileRequested) {
+        if (fileRequested.endsWith(".html"))
+            return "text/html";
+        else
+            return "text/plain";
+    }
+
+    private String[] parseRequestLine(String requestLine) {
+        StringTokenizer parse = new StringTokenizer(requestLine);
+        String method = parse.nextToken().toUpperCase();
+        String requestedFile = parse.nextToken().toLowerCase();
+        return new String[]{method, requestedFile};
+    }
+
+    private void fileNotFound(PrintWriter out, OutputStream dataOut) throws IOException {
+        File file = new File(WEB_ROOT, FILE_NOT_FOUND);
+        int fileLength = (int) file.length();
+        String content = "text/html";
+        byte[] fileData = readFileData(file, fileLength);
+
+        out.println("HTTP/1.1 404 File Not Found");
+        out.println("Server: Java HTTP Server from dhinesh : 1.0");
+        out.println("Date: " + new Date());
+        out.println("Content-type: " + content);
+        out.println("Content-length: " + fileLength);
+        out.println(); // blank line between headers and content
+        out.flush();
+        dataOut.write(fileData, 0, fileLength);
+        dataOut.flush();
+    }
+
 }
+
 

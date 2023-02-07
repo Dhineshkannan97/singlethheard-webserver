@@ -9,7 +9,6 @@ public class Main {
     static Logger logger = LoggerFactory.getLogger(Main.class);
     public static void main(String[] args) throws IOException {
         ServerSocket serverSocket = new ServerSocket(8060);
-        System.out.println("server start");
         logger.info("\u001B[34m" + "server started" + "\u001B[0m");
         Server server = new Server();
         server.getConnections(serverSocket);
