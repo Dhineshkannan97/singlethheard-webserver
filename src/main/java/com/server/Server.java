@@ -14,7 +14,7 @@ public class Server {
     private int maxConnections = 100;
     private int connectionsProcessed = 0;
     static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
-    boolean verbose =true;
+    boolean verbose = true;
     static final File WEB_ROOT = new File("C:\\Users\\Dhinesh Kannan\\Documents\\Streams\\singlethheard-webserver\\src\\main\\resources");
     static final String DEFAULT_FILE = "punchline.html";
     static final String FILE_NOT_FOUND = "404.html";
@@ -27,7 +27,7 @@ public class Server {
             if (connectionsProcessed >= maxConnections) {
                 break;
             }
-             clientSocket = serverSocket.accept();
+            clientSocket = serverSocket.accept();
             processClientRequest(clientSocket);
             connectionsProcessed++;
         }
@@ -46,8 +46,7 @@ public class Server {
 
             inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             String input;
-            while (((input = inStream.readLine()) != null) && !(input.isEmpty()))
-            {
+            while (((input = inStream.readLine()) != null) && !(input.isEmpty())) {
                 String[] request = parseRequestLine(input);
                 String method = request[0];
                 String requestedFile = request[1];
@@ -119,14 +118,11 @@ public class Server {
                 inStream.close();
                 outStream.close();
                 dataOutStream.close();
-                clientSocket.close(); // we close socket connection
+//               we close socket connection
             } catch (Exception e) {
                 System.err.println("Error closing stream : " + e.getMessage());
             }
 
-            if (verbose) {
-                System.out.println("Connection closed.\n");
-            }
         }
         Instant endTime = Instant.now();
         Duration actualDelay = Duration.between(startTime, endTime);
