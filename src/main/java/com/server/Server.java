@@ -1,7 +1,5 @@
 package com.server;
 
-import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -12,7 +10,7 @@ import java.util.*;
 public class Server {
     private int maxConnections = 100;
     private int connectionsProcessed = 0;
-    static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
+    //    static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
     boolean verbose = true;
     static final File WEB_ROOT = new File("C:\\Users\\Dhinesh Kannan\\Documents\\Streams\\singlethheard-webserver\\src\\main\\resources");
     static final String DEFAULT_FILE = "punchline.html";
@@ -95,18 +93,21 @@ public class Server {
             try {
                 fileNotFound(outStream, dataOutStream);
             } catch (IOException ioe) {
-                logger.warn("Error with file not found exception : " + ioe.getMessage());
-                logger.info("File not found");
+                System.out.println("Error with file not found exception : " + ioe.getMessage());
+//                logger.warn("Error with file not found exception : " + ioe.getMessage());
+//                logger.info("File not found");
             }
 
         } catch (
                 IOException ioe) {
-            logger.warn("Server error : " + ioe);
+            System.out.println("Server error : " + ioe);
+//            logger.warn("Server error : " + ioe);
         } finally {
             try {
                 inStream.close();
                 outStream.close();
                 dataOutStream.close();
+                clientSocket.close();
 //               we close socket connection
             } catch (Exception e) {
                 System.err.println("Error closing stream : " + e.getMessage());
@@ -115,7 +116,8 @@ public class Server {
 //        }
             Instant endTime = Instant.now();
             Duration actualDelay = Duration.between(startTime, endTime);
-            logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
+            System.out.println(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
+//            logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
         }
     }
 
@@ -160,10 +162,8 @@ public class Server {
         }
         System.out.println(lines.get(0));
         String[] request = parseRequestLine(lines.get(0));
-
         String method = request[0];
         String requestedFile = request[1];
-
         Map<String, String> result = new HashMap<>();
         result.put("method", method);
         result.put("requestedFile", requestedFile);
