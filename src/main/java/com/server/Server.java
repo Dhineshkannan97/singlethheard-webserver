@@ -7,10 +7,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Server {
     private int maxConnections = 100;
@@ -34,7 +31,7 @@ public class Server {
         }
     }
 
-    private void processClientRequest(Socket clientSocket) throws IOException {
+    private void processClientRequest(Socket clientSocket) {
         Instant startTime = Instant.now();
         BufferedReader inStream = null;
         PrintWriter outStream = null;
@@ -44,9 +41,9 @@ public class Server {
             inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
             outStream = new PrintWriter(clientSocket.getOutputStream());
             dataOutStream = new BufferedOutputStream(clientSocket.getOutputStream());
-            String[] request = parseAndReadLines(inStream);
-            String method = request[0];
-            String requestedFile = request[1];
+            Map<String, String> request = parseAndReadLines(inStream);
+            String method = request.get("method");
+            String requestedFile = request.get("requestedFile");
             if (!method.equals("GET") && !method.equals("HEAD")) {
                 File file = new File(WEB_ROOT, METHOD_NOT_SUPPORTED);
                 int fileLength = (int) file.length();
@@ -152,7 +149,7 @@ public class Server {
         return new String[]{method, requestedFile};
     }
 
-    private String[] parseAndReadLines(BufferedReader inStream) throws IOException {
+    private Map<String, String> parseAndReadLines(BufferedReader inStream) throws IOException {
         List<String> lines = new ArrayList<>();
         String line;
         while ((line = inStream.readLine()) != null) {
@@ -161,12 +158,18 @@ public class Server {
                 break;
             }
         }
+        System.out.println(lines.get(0));
         String[] request = parseRequestLine(lines.get(0));
+
         String method = request[0];
         String requestedFile = request[1];
 
-        return new String[]{method, requestedFile};
+        Map<String, String> result = new HashMap<>();
+        result.put("method", method);
+        result.put("requestedFile", requestedFile);
+        return result;
     }
+
 
     private void fileNotFound(PrintWriter out, OutputStream dataOut) throws IOException {
         File file = new File(WEB_ROOT, FILE_NOT_FOUND);
