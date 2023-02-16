@@ -1,5 +1,7 @@
 package com.server;
 
+import org.slf4j.LoggerFactory;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -8,13 +10,12 @@ import java.time.Instant;
 import java.util.*;
 
 public class Server {
+    static final String DEFAULT_FILE = "punchline.html";
+    static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
+    boolean verbose = true;
+    Socket clientSocket;
     private int maxConnections = 100;
     private int connectionsProcessed = 0;
-    //    static org.slf4j.Logger logger = LoggerFactory.getLogger(Server.class);
-    boolean verbose = true;
-    static final File WEB_ROOT = new File("C:\\Users\\Dhinesh Kannan\\Documents\\Streams\\singlethheard-webserver\\src\\main\\resources");
-    static final String DEFAULT_FILE = "punchline.html";
-    Socket clientSocket;
 
     public void getConnections(ServerSocket serverSocket) throws IOException {
         while (true) {
@@ -27,41 +28,38 @@ public class Server {
         }
     }
 
-    private void processClientRequest(Socket clientSocket) {
+    private void processClientRequest(Socket clientSocket) throws IOException {
         Instant startTime = Instant.now();
         BufferedReader inStream = null;
         PrintWriter outStream = null;
         BufferedOutputStream dataOutStream = null;
-//        String requestedFile = null;
+        inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        outStream = new PrintWriter(clientSocket.getOutputStream());
+        dataOutStream = new BufferedOutputStream(clientSocket.getOutputStream());
+        if (inStream != null) {
+            Map<String, String> request = parseAndReadLines(inStream);
+            String method = request.get("method");
+            String requestedFile = request.get("requestedFile");
+            if (!method.equals("GET") && !method.equals("HEAD")) {
+                String contentMimeType = "text/html";
+                // we send HTTP Headers with data to client
+                outStream.println("HTTP/1.1 501 Not Implemented");
+                outStream.println("Server: Java HTTP Server from S : 1.0");
+                outStream.println("Date: " + new Date());
+                outStream.println("Content-type: " + contentMimeType);
+                outStream.println(); // blank line between headers and content, very important !
+                outStream.flush(); // flush character output stream buffer
+                // file
+                dataOutStream.write(readHtmlFile("not_supported.html"));
+                dataOutStream.flush();
 
-        try {
-            inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            outStream = new PrintWriter(clientSocket.getOutputStream());
-            dataOutStream = new BufferedOutputStream(clientSocket.getOutputStream());
-            if (inStream != null) {
-                Map<String, String> request = parseAndReadLines(inStream);
-                String method = request.get("method");
-                String requestedFile = request.get("requestedFile");
-                if (!method.equals("GET") && !method.equals("HEAD")) {
-                    String contentMimeType = "text/html";
-                    // we send HTTP Headers with data to client
-                    outStream.println("HTTP/1.1 501 Not Implemented");
-                    outStream.println("Server: Java HTTP Server from S : 1.0");
-                    outStream.println("Date: " + new Date());
-                    outStream.println("Content-type: " + contentMimeType);
-//                    outStream.println("Content-length: " + fileLength);
-                    outStream.println(); // blank line between headers and content, very important !
-                    outStream.flush(); // flush character output stream buffer
-                    // file
-                    dataOutStream.write(readHtmlFile("not_supported.html"));
-                    dataOutStream.flush();
-
-                } else {
+            } else {
+                try {
                     // GET or HEAD method
                     if (requestedFile.endsWith("/")) {
                         requestedFile += DEFAULT_FILE;
                     }
-                    if (method.equals("GET")) { // GET method so we return content
+                    if (method.equals("GET") && (requestedFile.equals("punchline.html"))) { // GET method so we return content
 
                         // send HTTP Headers
                         outStream.println("HTTP/1.1 200 OK");
@@ -71,52 +69,44 @@ public class Server {
                         outStream.flush(); // flush character output stream buffer
                         dataOutStream.write(readHtmlFile("punchline.html"));
                         dataOutStream.flush();
+                    } else {
+                        fileNotFound(outStream, dataOutStream);
                     }
-
                     if (verbose) {
-                        System.out.println("File " + requestedFile + " of type "  + " returned");
+//                            System.out.println("File " + requestedFile + " of type " + " returned");
+                        logger.info("File " + requestedFile + " of type " + " returned");
                     }
+                } catch (FileNotFoundException fnfe) {
+                    try {
+                        fileNotFound(outStream, dataOutStream);
+                    } catch (IOException ioe) {
+//                            System.out.println("Error with file not found exception : " + ioe.getMessage());
+                        logger.warn("Error with file not found exception : " + ioe.getMessage());
+                        logger.info("File not found");
+                    }
+                } finally {
+                    try {
+                        inStream.close();
+                        outStream.close();
+                        dataOutStream.close();
+//                clientSocket.close();//               we close socket connection
 
+                    } catch (Exception e) {
+                        System.err.println("Error closing stream : " + e.getMessage());
+                    }
                 }
             }
-        } catch (FileNotFoundException fnfe) {
-            try {
-                fileNotFound(outStream, dataOutStream);
-            } catch (IOException ioe) {
-                System.out.println("Error with file not found exception : " + ioe.getMessage());
-//                logger.warn("Error with file not found exception : " + ioe.getMessage());
-//                logger.info("File not found");
-            }
-
-        } catch (
-                IOException ioe) {
-            System.out.println("Server error : " + ioe);
-//            logger.warn("Server error : " + ioe);
-        } finally {
-            try {
-                inStream.close();
-                outStream.close();
-                dataOutStream.close();
-//                clientSocket.close();
-//               we close socket connection
-            } catch (Exception e) {
-                System.err.println("Error closing stream : " + e.getMessage());
-            }
-
-//        }
-
-//            logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
+//         System.out.println(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
         }
         Instant endTime = Instant.now();
         Duration actualDelay = Duration.between(startTime, endTime);
-        System.out.println(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
+
+        logger.info(" actual delay: " + actualDelay.toMillis() + " milliseconds.");
     }
 
     private String getContentType(String fileRequested) {
-        if (fileRequested.endsWith(".html"))
-            return "text/html";
-        else
-            return "text/plain";
+        if (fileRequested.endsWith(".html")) return "text/html";
+        else return "text/plain";
     }
 
     private String[] parseRequestLine(String requestLine) {
@@ -158,6 +148,7 @@ public class Server {
         dataOut.write(readHtmlFile("404.html"));
         dataOut.flush();
     }
+
     private byte[] readHtmlFile(String fileName) throws IOException {
         ClassLoader classLoader = getClass().getClassLoader();
         InputStream inputStream = classLoader.getResourceAsStream(fileName);
@@ -172,7 +163,6 @@ public class Server {
         byte[] htmlData = outputStream.toByteArray();
         outputStream.close();
         inputStream.close();
-
         return htmlData;
     }
 
