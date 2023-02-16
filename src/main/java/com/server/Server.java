@@ -32,10 +32,12 @@ public class Server {
         BufferedReader inStream = null;
         PrintWriter outStream = null;
         BufferedOutputStream dataOutStream = null;
+
         inStream = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         outStream = new PrintWriter(clientSocket.getOutputStream());
         dataOutStream = new BufferedOutputStream(clientSocket.getOutputStream());
-        if (inStream != null) {
+//       && lines.isEmpty()
+        if (inStream != null ) {
             Map<String, String> request = parseAndReadLines(inStream);
             String method = request.get("method");
             String requestedFile = request.get("requestedFile");
@@ -87,9 +89,10 @@ public class Server {
                     try {
                         inStream.close();
                         outStream.close();
+                        clientSocket.close();
                         dataOutStream.close();
-//                clientSocket.close();//               we close socket connection
-
+                //               we close socket connection
+logger.info("client close");
                     } catch (Exception e) {
                         System.err.println("Error closing stream : " + e.getMessage());
                     }
@@ -119,19 +122,23 @@ public class Server {
         Map<String, String> result = new HashMap<>();
         List<String> lines = new ArrayList<>();
         String line;
+logger.info("before loop");
         while ((line = inStream.readLine()) != null) {
             lines.add(line);
+            logger.info(line);
             if (line.isEmpty()) {
                 break;
             }
 
         }
-        System.out.println(lines.get(0));
-        String[] request = parseRequestLine(lines.get(0));
-        String method = request[0];
-        String requestedFile = request[1];
-        result.put("method", method);
-        result.put("requestedFile", requestedFile);
+        if(lines.size() > 0 && !lines.isEmpty()) { // check if the ArrayList is not empty
+            System.out.println(lines.get(0));
+            String[] request = parseRequestLine(lines.get(0));
+            String method = request[0];
+            String requestedFile = request[1];
+            result.put("method", method);
+            result.put("requestedFile", requestedFile);
+        }
         return result;
     }
 
