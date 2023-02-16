@@ -1,7 +1,6 @@
 package com.server;
 
 import org.slf4j.LoggerFactory;
-
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -59,7 +58,7 @@ public class Server {
                     if (requestedFile.endsWith("/")) {
                         requestedFile += DEFAULT_FILE;
                     }
-                    if (method.equals("GET") && (requestedFile.equals("punchline.html"))) { // GET method so we return content
+                    if (method.equals("GET") && (requestedFile.equals("/punchline.html"))) { // GET method so we return content
 
                         // send HTTP Headers
                         outStream.println("HTTP/1.1 200 OK");
